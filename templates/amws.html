@@ -4,158 +4,472 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AMWS - 공군 작전 기상 지원 시스템</title>
-    <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Custom CSS -->
-    <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+            min-height: 100vh;
+            color: #e0e0e0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        /* 네비게이션 */
+        .navbar {
+            background: rgba(15, 32, 39, 0.95) !important;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+        
+        .navbar-brand {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .nav-btn {
+            transition: all 0.3s ease;
+            border-radius: 8px !important;
+            font-weight: 600;
+        }
+        
+        .nav-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        /* 빠른 접근 카드 */
+        .quick-access-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            margin-bottom: 30px;
+        }
+        
+        .quick-access-title {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 25px;
+            text-align: center;
+        }
+        
+        .quick-btn {
+            height: 140px;
+            border-radius: 15px;
+            border: none;
+            transition: all 0.4s ease;
+            position: relative;
+            overflow: hidden;
+            font-weight: 600;
+        }
+        
+        .quick-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+        
+        .quick-btn:hover::before {
+            left: 100%;
+        }
+        
+        .quick-btn:hover {
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
+        }
+        
+        .quick-btn-icon {
+            font-size: 3em;
+            margin-bottom: 10px;
+            display: block;
+        }
+        
+        .quick-btn-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            display: block;
+            margin-bottom: 5px;
+        }
+        
+        .quick-btn-subtitle {
+            font-size: 0.85rem;
+            opacity: 0.85;
+        }
+        
+        .btn-map {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-matrix {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+        
+        .btn-monitor {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+        }
+        
+        .btn-analyze {
+            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+            color: white;
+        }
+        
+        /* 미션 구성 카드 */
+        .mission-card {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            margin-bottom: 30px;
+        }
+        
+        .card-header-custom {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 15px 25px;
+            border-radius: 15px 15px 0 0;
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: white;
+            margin: -30px -30px 20px -30px;
+        }
+        
+        .form-label {
+            color: #a0aec0;
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+        
+        .form-select, .form-control {
+            background: rgba(255, 255, 255, 0.1) !important;
+            border: 1px solid rgba(255, 255, 255, 0.2) !important;
+            color: #fff !important;
+            border-radius: 10px !important;
+            padding: 12px 15px !important;
+            transition: all 0.3s ease;
+        }
+        
+        .form-select:focus, .form-control:focus {
+            background: rgba(255, 255, 255, 0.15) !important;
+            border-color: #667eea !important;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.25) !important;
+        }
+        
+        .form-select option {
+            background: #1a202c;
+            color: #fff;
+        }
+        
+        .btn-analyze-action {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 10px;
+            padding: 12px 40px;
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: white;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-analyze-action:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6);
+        }
+        
+        /* 결과 대시보드 */
+        .status-box {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            padding: 30px;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        
+        .data-label {
+            color: #a0aec0;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .status-big {
+            font-size: 3.5rem;
+            font-weight: 900;
+            margin: 15px 0;
+            text-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+        }
+        
+        .text-success {
+            color: #43e97b !important;
+        }
+        
+        .text-danger {
+            color: #f5576c !important;
+        }
+        
+        .info-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+        }
+        
+        .data-card {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+            height: 100%;
+        }
+        
+        .data-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+        }
+        
+        .card-header-mini {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            border-radius: 10px 10px 0 0;
+            text-align: center;
+            font-weight: 700;
+            margin: -25px -25px 15px -25px;
+            font-size: 1rem;
+        }
+        
+        .data-value {
+            font-size: 2.5rem;
+            font-weight: 900;
+            color: #fff;
+            margin: 15px 0;
+        }
+        
+        .progress {
+            height: 8px !important;
+            border-radius: 10px !important;
+            background-color: rgba(255, 255, 255, 0.1) !important;
+            margin: 15px 0;
+        }
+        
+        .progress-bar {
+            border-radius: 10px !important;
+            transition: width 0.6s ease;
+        }
+        
+        .badge {
+            padding: 8px 15px;
+            border-radius: 8px;
+            font-weight: 600;
+        }
+        
+        /* 애니메이션 */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .container > * {
+            animation: fadeInUp 0.6s ease-out;
+        }
+        
+        /* 반응형 */
+        @media (max-width: 768px) {
+            .quick-btn {
+                height: 120px;
+            }
+            .quick-btn-icon {
+                font-size: 2em;
+            }
+            .status-big {
+                font-size: 2.5rem;
+            }
+        }
+    </style>
 </head>
 <body>
 
-<!-- 통합 네비게이션 바 -->
-<nav class="navbar navbar-dark bg-dark border-bottom border-secondary mb-4">
+<!-- 네비게이션 바 -->
+<nav class="navbar navbar-dark mb-4">
     <div class="container-fluid">
         <span class="navbar-brand mb-0 h1">
-            ✈️ AMWS (Air Mission Weather System)
+            <i class="fas fa-plane-departure"></i> AMWS
         </span>
         <div class="d-flex gap-2">
-            <a href="/amws/" class="btn btn-sm btn-primary">대시보드</a>
-            <a href="/amws/map" class="btn btn-sm btn-outline-light">지도</a>
-            <a href="/amws/mission-matrix" class="btn btn-sm btn-outline-light">작전표</a>
-            <a href="/amws/monitor" class="btn btn-sm btn-outline-light">모니터</a>
+            <a href="/amws/" class="btn btn-sm btn-primary nav-btn">
+                <i class="fas fa-tachometer-alt"></i> 대시보드
+            </a>
+            <a href="/amws/map" class="btn btn-sm btn-outline-light nav-btn">
+                <i class="fas fa-map-marked-alt"></i> 지도
+            </a>
+            <a href="/amws/mission-matrix" class="btn btn-sm btn-outline-light nav-btn">
+                <i class="fas fa-table"></i> 작전표
+            </a>
+            <a href="/amws/monitor" class="btn btn-sm btn-outline-light nav-btn">
+                <i class="fas fa-wifi"></i> 모니터
+            </a>
         </div>
-        <span class="text-secondary small">UNCLASSIFIED</span>
+        <span class="text-secondary small">
+            <i class="fas fa-shield-alt"></i> UNCLASSIFIED
+        </span>
     </div>
 </nav>
 
 <div class="container">
-    <!-- 빠른 접근 버튼 섹션 추가 -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card bg-dark border-secondary">
-                <div class="card-body">
-                    <h5 class="card-title text-light mb-3">🚀 빠른 접근</h5>
-                    <div class="row g-3">
-                        <div class="col-md-3">
-                            <a href="/amws/map" class="btn btn-lg btn-success w-100" style="height: 100px;">
-                                <div class="d-flex flex-column align-items-center justify-content-center h-100">
-                                    <span style="font-size: 2em;">🗺️</span>
-                                    <span class="mt-2">지도 보기</span>
-                                    <small class="text-light opacity-75">비행장 위치 및 기상</small>
-                                </div>
-                            </a>
-                        </div>
-                        <div class="col-md-3">
-                            <a href="/amws/mission-matrix" class="btn btn-lg btn-info w-100" style="height: 100px;">
-                                <div class="d-flex flex-column align-items-center justify-content-center h-100">
-                                    <span style="font-size: 2em;">📊</span>
-                                    <span class="mt-2">작전 가능 현황</span>
-                                    <small class="text-light opacity-75">매트릭스 테이블</small>
-                                </div>
-                            </a>
-                        </div>
-                        <div class="col-md-3">
-                            <a href="/amws/monitor" class="btn btn-lg btn-warning w-100" style="height: 100px;">
-                                <div class="d-flex flex-column align-items-center justify-content-center h-100">
-                                    <span style="font-size: 2em;">📡</span>
-                                    <span class="mt-2">API 모니터</span>
-                                    <small class="text-dark opacity-75">데이터 수신 상태</small>
-                                </div>
-                            </a>
-                        </div>
-                        <div class="col-md-3">
-                            <a href="#analysisForm" class="btn btn-lg btn-primary w-100" style="height: 100px;">
-                                <div class="d-flex flex-column align-items-center justify-content-center h-100">
-                                    <span style="font-size: 2em;">🎯</span>
-                                    <span class="mt-2">임무 분석</span>
-                                    <small class="text-light opacity-75">개별 판정</small>
-                                </div>
-                            </a>
-                        </div>
-                    </div>
-                </div>
+    <!-- 빠른 접근 섹션 -->
+    <div class="quick-access-card">
+        <h2 class="quick-access-title">
+            <i class="fas fa-rocket"></i> 빠른 접근
+        </h2>
+        <div class="row g-4">
+            <div class="col-md-3">
+                <a href="/amws/map" class="btn quick-btn btn-map w-100">
+                    <span class="quick-btn-icon"><i class="fas fa-map-marked-alt"></i></span>
+                    <span class="quick-btn-title">지도 보기</span>
+                    <span class="quick-btn-subtitle">비행장 위치 및 기상</span>
+                </a>
+            </div>
+            <div class="col-md-3">
+                <a href="/amws/mission-matrix" class="btn quick-btn btn-matrix w-100">
+                    <span class="quick-btn-icon"><i class="fas fa-table"></i></span>
+                    <span class="quick-btn-title">작전 현황</span>
+                    <span class="quick-btn-subtitle">매트릭스 테이블</span>
+                </a>
+            </div>
+            <div class="col-md-3">
+                <a href="/amws/monitor" class="btn quick-btn btn-monitor w-100">
+                    <span class="quick-btn-icon"><i class="fas fa-wifi"></i></span>
+                    <span class="quick-btn-title">API 모니터</span>
+                    <span class="quick-btn-subtitle">데이터 수신 상태</span>
+                </a>
+            </div>
+            <div class="col-md-3">
+                <a href="#analysisForm" class="btn quick-btn btn-analyze w-100">
+                    <span class="quick-btn-icon"><i class="fas fa-crosshairs"></i></span>
+                    <span class="quick-btn-title">임무 분석</span>
+                    <span class="quick-btn-subtitle">개별 판정</span>
+                </a>
             </div>
         </div>
     </div>
 
-    <!-- 1. 컨트롤 패널 -->
-    <div class="row mb-4" id="analysisForm">
-        <div class="col-md-12">
-            <div class="card">
-                <div class="card-header">Mission Configuration</div>
-                <div class="card-body">
-                    <form id="analysisForm" class="row g-3 align-items-center">
-                        <div class="col-md-4">
-                            <label for="baseSelect" class="form-label text-secondary">Base (비행장)</label>
-                            <select class="form-select bg-dark text-light border-secondary" id="baseSelect">
-                                {% for base in bases %}
-                                <option value="{{ base[0] }}">{{ base[0] }} - {{ base[1] }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <label for="aircraftSelect" class="form-label text-secondary">Asset (항공자산)</label>
-                            <select class="form-select bg-dark text-light border-secondary" id="aircraftSelect">
-                                {% for ac in aircrafts %}
-                                <option value="{{ ac[0] }}">{{ ac[0] }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-md-4 text-end">
-                            <label class="form-label d-block">&nbsp;</label>
-                            <button type="button" class="btn btn-primary w-50" onclick="analyze()">Analyze</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
+    <!-- 미션 구성 패널 -->
+    <div class="mission-card" id="analysisForm">
+        <div class="card-header-custom">
+            <i class="fas fa-sliders-h"></i> Mission Configuration
         </div>
+        <form class="row g-4 align-items-end">
+            <div class="col-md-5">
+                <label for="baseSelect" class="form-label">
+                    <i class="fas fa-map-marker-alt"></i> Base (비행장)
+                </label>
+                <select class="form-select" id="baseSelect">
+                    {% for base in bases %}
+                    <option value="{{ base[0] }}">{{ base[0] }} - {{ base[1] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-5">
+                <label for="aircraftSelect" class="form-label">
+                    <i class="fas fa-fighter-jet"></i> Asset (항공자산)
+                </label>
+                <select class="form-select" id="aircraftSelect">
+                    {% for ac in aircrafts %}
+                    <option value="{{ ac[0] }}">{{ ac[0] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="button" class="btn btn-analyze-action w-100" onclick="analyze()">
+                    <i class="fas fa-search"></i> Analyze
+                </button>
+            </div>
+        </form>
     </div>
 
-    <!-- 2. 결과 대시보드 (초기에는 숨김) -->
+    <!-- 결과 대시보드 -->
     <div id="dashboardResult" style="display: none;">
-        <div class="row">
-            <!-- 좌측: 종합 판정 -->
+        <div class="row g-4">
+            <!-- 종합 판정 -->
             <div class="col-md-4">
                 <div class="status-box">
-                    <div class="data-label mb-2">MISSION STATUS</div>
+                    <div class="data-label mb-2">
+                        <i class="fas fa-clipboard-check"></i> MISSION STATUS
+                    </div>
                     <div id="statusText" class="status-big">GO</div>
                     <div id="statusReason" class="mt-3 text-start small text-warning"></div>
                 </div>
 
-                <div class="card mt-3">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between">
-                            <span class="data-label">Base</span>
-                            <span id="resBaseName" class="fw-bold">-</span>
-                        </div>
-                        <div class="d-flex justify-content-between mt-2">
-                            <span class="data-label">Obs Time</span>
-                            <span id="resTime">-</span>
-                        </div>
-                        <div class="d-flex justify-content-between mt-2">
-                            <span class="data-label">Weather</span>
-                            <span id="resWeather" class="badge bg-secondary">-</span>
-                        </div>
+                <div class="info-card mt-3">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="data-label"><i class="fas fa-home"></i> Base</span>
+                        <span id="resBaseName" class="fw-bold text-white">-</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="data-label"><i class="fas fa-clock"></i> Obs Time</span>
+                        <span id="resTime" class="text-white">-</span>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span class="data-label"><i class="fas fa-cloud"></i> Weather</span>
+                        <span id="resWeather" class="badge bg-secondary">-</span>
                     </div>
                 </div>
             </div>
 
-            <!-- 우측: 상세 요소 분석 -->
+            <!-- 상세 요소 분석 -->
             <div class="col-md-8">
-                <div class="row">
-                    <!-- 측풍 분석 -->
+                <div class="row g-4">
+                    <!-- 측풍 -->
                     <div class="col-md-4">
-                        <div class="card h-100">
-                            <div class="card-header text-center">Crosswind</div>
-                            <div class="card-body text-center">
+                        <div class="data-card">
+                            <div class="card-header-mini">
+                                <i class="fas fa-wind"></i> Crosswind
+                            </div>
+                            <div class="text-center">
                                 <div class="data-value" id="resXwind">0 kt</div>
-                                <div class="small text-secondary mb-2">Limit: <span id="limXwind">30</span> kt</div>
-
-                                <!-- Bar Graph -->
-                                <div class="progress" style="height: 5px; background-color: #333;">
+                                <div class="small text-secondary mb-2">
+                                    Limit: <span id="limXwind">30</span> kt
+                                </div>
+                                <div class="progress">
                                     <div id="barXwind" class="progress-bar bg-success" role="progressbar" style="width: 0%"></div>
                                 </div>
-
-                                <hr class="border-secondary">
+                                <hr style="border-color: rgba(255,255,255,0.1);">
                                 <div class="text-start small text-secondary">
                                     Wind: <span id="resWindRaw" class="text-light"></span><br>
                                     Rwy Hdg: <span id="resRwyRaw" class="text-light"></span>
@@ -164,30 +478,36 @@
                         </div>
                     </div>
 
-                    <!-- 시정 분석 -->
+                    <!-- 시정 -->
                     <div class="col-md-4">
-                        <div class="card h-100">
-                            <div class="card-header text-center">Visibility</div>
-                            <div class="card-body text-center">
+                        <div class="data-card">
+                            <div class="card-header-mini">
+                                <i class="fas fa-eye"></i> Visibility
+                            </div>
+                            <div class="text-center">
                                 <div class="data-value" id="resVis">9999 m</div>
-                                <div class="small text-secondary mb-2">Min: <span id="limVis">800</span> m</div>
-
-                                <div class="progress" style="height: 5px; background-color: #333;">
+                                <div class="small text-secondary mb-2">
+                                    Min: <span id="limVis">800</span> m
+                                </div>
+                                <div class="progress">
                                     <div id="barVis" class="progress-bar bg-success" role="progressbar" style="width: 100%"></div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- 운고 분석 -->
+                    <!-- 운고 -->
                     <div class="col-md-4">
-                        <div class="card h-100">
-                            <div class="card-header text-center">Ceiling</div>
-                            <div class="card-body text-center">
+                        <div class="data-card">
+                            <div class="card-header-mini">
+                                <i class="fas fa-cloud-sun"></i> Ceiling
+                            </div>
+                            <div class="text-center">
                                 <div class="data-value" id="resCeil">30000 ft</div>
-                                <div class="small text-secondary mb-2">Min: <span id="limCeil">200</span> ft</div>
-
-                                <div class="progress" style="height: 5px; background-color: #333;">
+                                <div class="small text-secondary mb-2">
+                                    Min: <span id="limCeil">200</span> ft
+                                </div>
+                                <div class="progress">
                                     <div id="barCeil" class="progress-bar bg-success" role="progressbar" style="width: 100%"></div>
                                 </div>
                             </div>
@@ -199,13 +519,13 @@
     </div>
 </div>
 
-<!-- JavaScript Logic -->
+<!-- JavaScript -->
 <script>
 async function analyze() {
     const baseId = document.getElementById('baseSelect').value;
     const aircraftId = document.getElementById('aircraftSelect').value;
 
-    const response = await fetch('/analyze', {
+    const response = await fetch('/amws/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ base_id: baseId, aircraft_id: aircraftId })
@@ -218,57 +538,44 @@ async function analyze() {
         return;
     }
 
-    // UI 표시
     document.getElementById('dashboardResult').style.display = 'block';
+    document.getElementById('dashboardResult').scrollIntoView({ behavior: 'smooth' });
 
-    // 1. 종합 판정 업데이트
     const statusEl = document.getElementById('statusText');
     statusEl.innerText = data.status;
     statusEl.className = 'status-big text-' + data.status_color;
 
-    // NO-GO 사유 출력
     const reasonEl = document.getElementById('statusReason');
     if (data.reasons.length > 0) {
-        reasonEl.innerHTML = '🚫 ' + data.reasons.join('<br>🚫 ');
+        reasonEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i> ' + data.reasons.join('<br><i class="fas fa-exclamation-triangle"></i> ');
     } else {
-        reasonEl.innerHTML = '✅ All Parameters Normal';
+        reasonEl.innerHTML = '<i class="fas fa-check-circle"></i> All Parameters Normal';
     }
 
-    // 기본 정보 업데이트
     document.getElementById('resBaseName').innerText = data.base_name;
     document.getElementById('resTime').innerText = data.obs_time;
     document.getElementById('resWeather').innerText = data.weather_desc;
 
-    // 2. 수치 데이터 및 바 그래프 업데이트
-    // (1) Crosswind
-    updateCard('Xwind', data.crosswind, data.limits.xwind, true); // true: 값이 작을수록 좋음 (측풍)
+    updateCard('Xwind', data.crosswind, data.limits.xwind, true);
     document.getElementById('resWindRaw').innerText = data.wind_info;
     document.getElementById('resRwyRaw').innerText = data.rwy_info;
 
-    // (2) Visibility
-    updateCard('Vis', data.visibility, data.limits.vis, false); // false: 값이 클수록 좋음
-
-    // (3) Ceiling
+    updateCard('Vis', data.visibility, data.limits.vis, false);
     updateCard('Ceil', data.ceiling, data.limits.ceil, false);
 }
 
 function updateCard(id, current, limit, isLowerBetter) {
-    // 텍스트 업데이트
     document.getElementById('res' + id).innerText = current;
     document.getElementById('lim' + id).innerText = limit;
 
-    // 바 그래프 퍼센트 계산
     let percent = 0;
     let color = 'bg-success';
 
     if (isLowerBetter) {
-        // 측풍: 제한치보다 낮아야 함
         percent = (current / limit) * 100;
         if (current > limit) color = 'bg-danger';
         else if (current > limit * 0.8) color = 'bg-warning';
     } else {
-        // 시정/운고: 제한치보다 높아야 함
-        // 시각화를 위해 limit의 2배를 100%로 잡음 (단순화)
         let maxRef = limit * 3;
         percent = (current / maxRef) * 100;
         if (current < limit) color = 'bg-danger';
@@ -281,11 +588,6 @@ function updateCard(id, current, limit, isLowerBetter) {
     bar.style.width = percent + '%';
     bar.className = 'progress-bar ' + color;
 }
-
-// 페이지 로드 시 자동 분석 (첫 번째 옵션으로)
-window.onload = function() {
-    // analyze();
-};
 </script>
 
 </body>
