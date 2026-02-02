@@ -1,7 +1,43 @@
-<!-- 상단 부분 생략 (Bootstrap 등 포함) -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AMWS - API 모니터</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #1a1a1a;
+            color: #e0e0e0;
+        }
+        .card {
+            background-color: #2a2a2a;
+            border: 1px solid #495057;
+        }
+        .table-dark {
+            background-color: #2a2a2a;
+        }
+    </style>
+</head>
+<body>
+
+<nav class="navbar navbar-dark bg-dark border-bottom border-secondary mb-4">
+    <div class="container-fluid">
+        <span class="navbar-brand mb-0 h1">
+            ✈️ AMWS - API 수신 모니터
+        </span>
+        <div class="d-flex gap-2">
+            <a href="/amws/" class="btn btn-sm btn-outline-light">대시보드</a>
+            <a href="/amws/map" class="btn btn-sm btn-outline-light">지도</a>
+            <a href="/amws/mission-matrix" class="btn btn-sm btn-outline-light">작전표</a>
+            <a href="/amws/monitor" class="btn btn-sm btn-primary">모니터</a>
+        </div>
+    </div>
+</nav>
+
 <div class="container mt-5">
     <h2 class="text-light mb-4">📡 API 수신 상태 모니터링</h2>
-    <div class="card bg-dark border-secondary">
+    <div class="card border-secondary">
         <div class="card-body">
             <table class="table table-dark table-hover">
                 <thead>
@@ -21,7 +57,6 @@
                         <td>{{ item.last_update.strftime('%Y-%m-%d %H:%M') if item.last_update else '데이터 없음' }}</td>
                         <td>
                             {% if item.last_update %}
-                                <!-- 90분(1시간반) 이내면 정상 -->
                                 {% if item.time_diff.total_seconds() < 5400 %}
                                     <span class="badge bg-success">🟢 정상 (Online)</span>
                                 {% else %}
@@ -41,4 +76,11 @@
     </div>
     <!-- 1분마다 자동 새로고침 -->
     <meta http-equiv="refresh" content="60">
+    
+    <div class="alert alert-info mt-3" role="alert">
+        <strong>ℹ️ 안내:</strong> 이 페이지는 1분마다 자동으로 새로고침됩니다. 90분 이내 데이터는 정상, 초과 시 지연으로 표시됩니다.
+    </div>
 </div>
+
+</body>
+</html>
