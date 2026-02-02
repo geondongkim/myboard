@@ -694,5 +694,94 @@ def amws_map():
     
     return render_template('amws_map.html', map_html=map_html)
 
-if __name__ == '__main__':
-    app.run(debug=True)
+@app.route('/amws/mission-matrix')
+def amws_mission_matrix():
+    """AMWS 작전 가능 현황 매트릭스 테이블"""
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=DictCursor)
+    
+    # 쿼리 1번 실행: 전체 기지/항공자산 조합 매트릭스
+    query = """
+        WITH latest_weather AS (
+            SELECT DISTINCT ON (base_id)
+                base_id,
+                obs_time,
+                wind_dir,
+                wind_spd_kts,
+                visibility_m,
+                ceiling_ft,
+                weather_desc
+            FROM amws.weather_observations
+            ORDER BY base_id, obs_time DESC
+        )
+        SELECT 
+            b.base_id,
+            b.base_name,
+            b.runway_heading,
+            a.aircraft_id,
+            a.max_crosswind_kts,
+            a.min_visibility_m,
+            a.min_ceiling_ft,
+            a.precip_restricted,
+            w.obs_time,
+            w.wind_dir,
+            w.wind_spd_kts,
+            w.visibility_m,
+            w.ceiling_ft,
+            w.weather_desc,
+            ROUND(ABS(w.wind_spd_kts * SIN(RADIANS(w.wind_dir - b.runway_heading)))::numeric, 1) as crosswind_kts,
+            CASE 
+                WHEN w.wind_dir IS NULL OR w.wind_spd_kts IS NULL THEN 'NO DATA'
+                WHEN ABS(w.wind_spd_kts * SIN(RADIANS(w.wind_dir - b.runway_heading))) > a.max_crosswind_kts THEN 'NO-GO'
+                WHEN w.visibility_m < a.min_visibility_m THEN 'NO-GO'
+                WHEN w.ceiling_ft < a.min_ceiling_ft THEN 'NO-GO'
+                WHEN a.precip_restricted AND (w.weather_desc LIKE '%%RA%%' OR w.weather_desc LIKE '%%SN%%') THEN 'NO-GO'
+                ELSE 'GO'
+            END as mission_status,
+            ARRAY_REMOVE(ARRAY[
+                CASE WHEN w.wind_dir IS NOT NULL AND ABS(w.wind_spd_kts * SIN(RADIANS(w.wind_dir - b.runway_heading))) > a.max_crosswind_kts 
+                    THEN '측풍' END,
+                CASE WHEN w.visibility_m < a.min_visibility_m 
+                    THEN '시정' END,
+                CASE WHEN w.ceiling_ft < a.min_ceiling_ft 
+                    THEN '운고' END,
+                CASE WHEN a.precip_restricted AND (w.weather_desc LIKE '%%RA%%' OR w.weather_desc LIKE '%%SN%%') 
+                    THEN '강수' END
+            ], NULL) as no_go_reasons
+        FROM amws.airbases b
+        CROSS JOIN amws.aircraft_assets a
+        LEFT JOIN latest_weather w ON b.base_id = w.base_id
+        ORDER BY b.base_id, a.aircraft_id
+    """
+    
+    cur.execute(query)
+    matrix_data = cur.fetchall()
+    
+    # 항공자산 목록 추출 (컬럼 헤더용)
+    cur.execute("SELECT DISTINCT aircraft_id FROM amws.aircraft_assets ORDER BY aircraft_id")
+    aircraft_list = [row['aircraft_id'] for row in cur.fetchall()]
+    
+    # 비행장별로 데이터 그룹화
+    bases_dict = {}
+    for row in matrix_data:
+        base_id = row['base_id']
+        if base_id not in bases_dict:
+            bases_dict[base_id] = {
+                'base_name': row['base_name'],
+                'obs_time': row['obs_time'].strftime('%H:%M') if row['obs_time'] else 'N/A',
+                'weather': row['weather_desc'] or 'N/A',
+                'assets': {}
+            }
+        
+        bases_dict[base_id]['assets'][row['aircraft_id']] = {
+            'status': row['mission_status'],
+            'crosswind': row['crosswind_kts'],
+            'reasons': row['no_go_reasons'] if row['no_go_reasons'] else []
+        }
+    
+    cur.close()
+    conn.close()
+    
+    return render_template('amws_mission_table.html', 
+                          bases_dict=bases_dict, 
+                          aircraft_list=aircraft_list)
