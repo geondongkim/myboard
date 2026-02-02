@@ -365,25 +365,138 @@ def calculate_crosswind(wind_spd, wind_dir, runway_heading):
     return round(crosswind, 1)
 
 @app.route('/amws/')
-def amws_index():
-    """AMWS 메인 페이지 (기존 /amws/)"""
+def amws():
+    """AMWS 메인 대시보드 (지도 포함)"""
     conn = get_db_connection()
-    # AMWS는 인덱스로 접근하는 로직이 있으므로 일반 커서 사용 (또는 딕셔너리 커서도 무방하나 코드 호환성 유지)
-    cur = conn.cursor() 
+    cur = conn.cursor(cursor_factory=DictCursor)
     
-    # 비행장 목록 조회 (amws 스키마)
+    # 비행장 목록
     cur.execute("SELECT base_id, base_name FROM amws.airbases ORDER BY base_id")
     bases = cur.fetchall()
     
-    # 항공기 목록 조회
+    # 항공자산 목록
     cur.execute("SELECT aircraft_id FROM amws.aircraft_assets ORDER BY aircraft_id")
     aircrafts = cur.fetchall()
+    
+    # 지도 생성 (Folium)
+    m = folium.Map(
+        location=[36.5, 127.5],
+        zoom_start=7,
+        tiles='OpenStreetMap'
+    )
+    
+    # 각 비행장별로 마커 추가
+    for base in bases:
+        base_id = base['base_id']
+        base_name = base['base_name']
+        
+        # 비행장 좌표 조회
+        cur.execute("""
+            SELECT lat, lon, runway_heading FROM amws.airbases WHERE base_id = %s
+        """, (base_id,))
+        base_info = cur.fetchone()
+        
+        if not base_info:
+            continue
+            
+        lat = float(base_info['lat'])
+        lon = float(base_info['lon'])
+        
+        # 최신 기상 데이터 및 작전 가능 항공자산 수 조회
+        cur.execute("""
+            WITH latest_weather AS (
+                SELECT DISTINCT ON (base_id)
+                    base_id,
+                    obs_time,
+                    wind_dir,
+                    wind_spd_kts,
+                    visibility_m,
+                    ceiling_ft,
+                    weather_desc
+                FROM amws.weather_observations
+                WHERE base_id = %s
+                ORDER BY base_id, obs_time DESC
+            )
+            SELECT 
+                w.obs_time,
+                w.wind_dir,
+                w.wind_spd_kts,
+                w.weather_desc,
+                COUNT(CASE 
+                    WHEN ABS(w.wind_spd_kts * SIN(RADIANS(w.wind_dir - b.runway_heading))) <= a.max_crosswind_kts 
+                    AND w.visibility_m >= a.min_visibility_m 
+                    AND w.ceiling_ft >= a.min_ceiling_ft
+                    AND (NOT a.precip_restricted OR (w.weather_desc NOT LIKE '%%RA%%' AND w.weather_desc NOT LIKE '%%SN%%'))
+                    THEN 1 END) as go_count,
+                COUNT(a.aircraft_id) as total_aircraft_count
+            FROM amws.airbases b
+            LEFT JOIN latest_weather w ON b.base_id = w.base_id
+            CROSS JOIN amws.aircraft_assets a
+            WHERE b.base_id = %s
+            GROUP BY w.obs_time, w.wind_dir, w.wind_spd_kts, w.weather_desc
+        """, (base_id, base_id))
+        
+        weather_data = cur.fetchone()
+        
+        if weather_data and weather_data['obs_time']:
+            obs_time = weather_data['obs_time'].strftime('%H:%M')
+            wind_spd = weather_data['wind_spd_kts'] or 0
+            weather = weather_data['weather_desc'] or 'N/A'
+            go_count = weather_data['go_count'] or 0
+            total_count = weather_data['total_aircraft_count'] or 0
+            
+            # 마커 색상
+            if total_count == 0:
+                color = 'gray'
+            elif go_count == total_count:
+                color = 'green'
+            elif go_count > 0:
+                color = 'orange'
+            else:
+                color = 'red'
+            
+            # 팝업 HTML
+            popup_html = f"""
+            <div style="font-family: Arial; width: 250px;">
+                <h4 style="margin: 0 0 10px 0; color: #333;">{base_id} - {base_name}</h4>
+                <table style="width: 100%; font-size: 12px;">
+                    <tr><td><b>관측시간:</b></td><td>{obs_time}</td></tr>
+                    <tr><td><b>풍속:</b></td><td>{wind_spd} kt</td></tr>
+                    <tr><td><b>날씨:</b></td><td>{weather}</td></tr>
+                    <tr style="background-color: #f0f0f0;">
+                        <td><b>작전가능:</b></td>
+                        <td><span style="color: {color}; font-weight: bold;">{go_count}/{total_count}</span></td>
+                    </tr>
+                </table>
+                <p style="margin: 10px 0 0 0; font-size: 11px; color: #666;">
+                    <a href="/amws/map" style="color: #667eea;">지도 페이지</a>에서 상세 정보 확인
+                </p>
+            </div>
+            """
+        else:
+            color = 'gray'
+            popup_html = f"""
+            <div style="font-family: Arial; width: 250px;">
+                <h4 style="margin: 0 0 10px 0; color: #333;">{base_id} - {base_name}</h4>
+                <p style="color: #999;">기상 데이터 없음</p>
+            </div>
+            """
+        
+        # 마커 추가
+        folium.Marker(
+            location=[lat, lon],
+            popup=folium.Popup(popup_html, max_width=300),
+            tooltip=f"{base_id} - {base_name}",
+            icon=folium.Icon(color=color, icon='plane', prefix='fa')
+        ).add_to(m)
+    
+    # 지도를 HTML로 변환
+    map_html = m._repr_html_()
     
     cur.close()
     conn.close()
     
-    # [주의] 기존 index.html과 겹치므로 amws.html로 이름 변경 필요
-    return render_template('amws.html', bases=bases, aircrafts=aircrafts)
+    return render_template('amws.html', bases=bases, aircrafts=aircrafts, map_html=map_html)
 
 @app.route('/amws/analyze', methods=['POST'])
 def amws_analyze():

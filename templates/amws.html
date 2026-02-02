@@ -389,10 +389,25 @@
         </div>
     </div>
 
-    <!-- 미션 구성 패널 -->
+    <!-- 지도 섹션 -->
+    <div class="mission-card" id="mapSection">
+        <div class="card-header-custom">
+            <i class="fas fa-map-marked-alt"></i> Mission Map Overview
+        </div>
+        <div style="height: 600px; border-radius: 10px; overflow: hidden;">
+            {{ map_html|safe }}
+        </div>
+        <div class="text-center mt-3">
+            <a href="/amws/map" class="btn btn-outline-light">
+                <i class="fas fa-expand-arrows-alt"></i> 전체 화면으로 보기
+            </a>
+        </div>
+    </div>
+
+    <!-- 임무 분석 패널 -->
     <div class="mission-card" id="analysisForm">
         <div class="card-header-custom">
-            <i class="fas fa-sliders-h"></i> Mission Configuration
+            <i class="fas fa-sliders-h"></i> Mission Analysis Tool
         </div>
         <form class="row g-4 align-items-end">
             <div class="col-md-5">
