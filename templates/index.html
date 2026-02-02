@@ -1,0 +1,61 @@
+{% extends 'base.html' %} {% block title %}게시판 - 목록{% endblock %} {% block
+content %}
+<div class="bg-white shadow-lg rounded-lg p-6">
+  <h2 class="text-2xl font-bold mb-6">게시글 목록</h2>
+
+  <div class="mb-4 flex justify-end">
+    <a
+      href="{{ url_for('create_form') }}"
+      class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
+    >
+      <i class="fas fa-pen mr-2"></i>새 글 작성
+    </a>
+  </div>
+
+  <div class="overflow-x-auto">
+    <table class="min-w-full bg-white">
+      <thead>
+        <tr class="bg-gray-100 text-gray-600 uppercase text-sm">
+          <th class="py-3 px-6 text-left">번호</th>
+          <th class="py-3 px-6 text-left">제목</th>
+          <th class="py-3 px-6 text-left">작성자</th>
+          <th class="py-3 px-6 text-left">작성일</th>
+          <th class="py-3 px-6 text-center">조회수</th>
+          <th class="py-3 px-6 text-center">좋아요</th>
+        </tr>
+      </thead>
+      <tbody class="text-gray-600">
+        {% for post in posts %}
+        <tr class="border-b border-gray-200 hover:bg-gray-50">
+          <td class="py-3 px-6">{{ post['id'] }}</td>
+          <td class="py-3 px-6">
+            <a
+              href="{{ url_for('view_post', post_id=post.id) }}"
+              class="text-indigo-600 hover:text-indigo-800"
+            >
+              {{ post['title'] }}
+            </a>
+          </td>
+          <td class="py-3 px-6">{{ post['author'] }}</td>
+          <td class="py-3 px-6">
+            {{ post['created_at'].strftime('%Y-%m-%d %H:%M') }}
+          </td>
+          <td class="py-3 px-6 text-center">{{ post['view_count'] }}</td>
+          <td class="py-3 px-6 text-center">
+            <span class="text-red-500">
+              <i class="fas fa-heart mr-1"></i>{{ post['like_count'] }}
+            </span>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" class="py-6 text-center text-gray-500">
+            게시글이 없습니다.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}게시판{% endblock %}</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css"
+    />
+  </head>
+  <body class="bg-gray-100 min-h-screen">
+    <header class="bg-indigo-600 text-white p-4">
+      <div class="container mx-auto flex justify-between items-center">
+        <h1 class="text-2xl font-bold">
+          <a href="{{ url_for('index') }}" class="hover:text-indigo-200"
+            >게시판</a
+          >
+        </h1>
+        <nav>
+          <ul class="flex space-x-4">
+            <li>
+              <a href="{{ url_for('index') }}" class="hover:text-indigo-200"
+                >홈</a
+              >
+            </li>
+            <li>
+              <a
+                href="{{ url_for('create_form') }}"
+                class="hover:text-indigo-200"
+                >글쓰기</a
+              >
+            </li>
+          </ul>
+        </nav>
+      </div>
+    </header>
+
+    <main class="container mx-auto p-4 mt-6">
+      {% with messages = get_flashed_messages() %} {% if messages %}
+      <div class="mb-6">
+        {% for message in messages %}
+        <div
+          class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-2"
+        >
+          {{ message }}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %} {% endwith %} {% block content %}{% endblock %}
+    </main>
+
+    <footer class="bg-gray-800 text-white p-4 mt-12">
+      <div class="container mx-auto text-center">
+        <p>© 2025 Flask & PostgreSQL 게시판 by Chris Lin.</p>
+      </div>
+    </footer>
+  </body>
+</html>
