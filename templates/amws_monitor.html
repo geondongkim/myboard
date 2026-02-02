@@ -1,0 +1,44 @@
+<!-- 상단 부분 생략 (Bootstrap 등 포함) -->
+<div class="container mt-5">
+    <h2 class="text-light mb-4">📡 API 수신 상태 모니터링</h2>
+    <div class="card bg-dark border-secondary">
+        <div class="card-body">
+            <table class="table table-dark table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>비행장명</th>
+                        <th>최종 수신 시간</th>
+                        <th>상태 (Latency)</th>
+                        <th>누적 데이터 수</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in status_list %}
+                    <tr>
+                        <td>{{ item.base_id }}</td>
+                        <td>{{ item.base_name }}</td>
+                        <td>{{ item.last_update.strftime('%Y-%m-%d %H:%M') if item.last_update else '데이터 없음' }}</td>
+                        <td>
+                            {% if item.last_update %}
+                                <!-- 90분(1시간반) 이내면 정상 -->
+                                {% if item.time_diff.total_seconds() < 5400 %}
+                                    <span class="badge bg-success">🟢 정상 (Online)</span>
+                                {% else %}
+                                    <span class="badge bg-danger">🔴 지연 (Offline)</span>
+                                {% endif %}
+                                <small class="text-muted ms-2">{{ (item.time_diff.total_seconds() / 60)|int }}분 전</small>
+                            {% else %}
+                                <span class="badge bg-secondary">⚫ 데이터 없음</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ item.total_records }} 건</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <!-- 1분마다 자동 새로고침 -->
+    <meta http-equiv="refresh" content="60">
+</div>

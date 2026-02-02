@@ -473,5 +473,34 @@ def amws_analyze():
     
     return jsonify(result)
 
+@app.route('/amws/monitor')
+def amws_monitor():
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=DictCursor)
+
+    # 기지별 가장 최근 데이터 수신 시간 조회
+    sql = """
+        SELECT
+            b.base_id,
+            b.base_name,
+            MAX(w.obs_time) as last_update,
+            COUNT(w.obs_id) as total_records,
+            NOW() - MAX(w.obs_time) as time_diff
+        FROM amws.airbases b
+        LEFT JOIN amws.weather_observations w ON b.base_id = w.base_id
+        GROUP BY b.base_id, b.base_name
+        ORDER BY b.base_id
+    """
+    cur.execute(sql)
+    status_list = cur.fetchall()
+
+    cur.close()
+    conn.close()
+
+    return render_template('amws_monitor.html', status_list=status_list)
+
+
+
+
 if __name__ == '__main__':
     app.run(debug=True)
