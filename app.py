@@ -500,91 +500,124 @@ def amws():
 
 @app.route('/amws/analyze', methods=['POST'])
 def amws_analyze():
-    """AMWS 분석 로직 (AJAX 요청)"""
+    """개별 임무 분석 (시간대별 추세 포함)"""
     data = request.get_json()
-    base_id = data['base_id']
-    aircraft_id = data['aircraft_id']
+    base_id = data.get('base_id')
+    aircraft_id = data.get('aircraft_id')
     
     conn = get_db_connection()
-    cur = conn.cursor()
+    cur = conn.cursor(cursor_factory=DictCursor)
     
-    # 1. 기지 정보 및 최신 기상 조회
-    query_weather = """
+    # 1. 최근 24시간 기상 데이터 조회
+    query_trend = """
         SELECT 
-            b.base_name, b.runway_heading,
-            w.obs_time, w.wind_dir, w.wind_spd_kts, w.visibility_m, w.ceiling_ft, w.weather_desc
-        FROM amws.airbases b
-        JOIN amws.weather_observations w ON b.base_id = w.base_id
-        WHERE b.base_id = %s
-        ORDER BY w.obs_time DESC LIMIT 1
+            obs_time,
+            wind_dir,
+            wind_spd_kts,
+            visibility_m,
+            ceiling_ft,
+            weather_desc
+        FROM amws.weather_observations
+        WHERE base_id = %s
+        AND obs_time >= NOW() - INTERVAL '24 hours'
+        ORDER BY obs_time ASC
     """
-    cur.execute(query_weather, (base_id,))
-    weather = cur.fetchone()
+    cur.execute(query_trend, (base_id,))
+    weather_trend = cur.fetchall()
     
-    # 2. 항공기 제한치 조회
-    query_aircraft = """
-        SELECT max_crosswind_kts, min_visibility_m, min_ceiling_ft, precip_restricted
-        FROM amws.aircraft_assets
-        WHERE aircraft_id = %s
-    """
-    cur.execute(query_aircraft, (aircraft_id,))
-    asset = cur.fetchone()
+    # 2. 비행장 정보
+    cur.execute("SELECT base_name, runway_heading FROM amws.airbases WHERE base_id = %s", (base_id,))
+    base_info = cur.fetchone()
+    
+    # 3. 항공자산 제한치
+    cur.execute("""
+        SELECT max_crosswind_kts, min_visibility_m, min_ceiling_ft, precip_restricted 
+        FROM amws.aircraft_assets WHERE aircraft_id = %s
+    """, (aircraft_id,))
+    limits = cur.fetchone()
     
     cur.close()
     conn.close()
     
-    if not weather:
-        return jsonify({'error': '해당 기지의 기상 데이터가 없습니다.'})
-
-    # 데이터 매핑
-    base_name, rwy_hdg, obs_time, w_dir, w_spd, w_vis, w_ceil, w_desc = weather
-    max_xwind, min_vis, min_ceil, precip_limit = asset
-
-    # 3. 측풍 계산
-    curr_xwind = calculate_crosswind(w_spd, w_dir, rwy_hdg)
+    if not base_info or not limits:
+        return jsonify({'error': '데이터를 찾을 수 없습니다.'})
     
-    # 4. 판정 로직
-    reasons = []
-    status = 'GO'
-    status_color = 'success'
+    runway_heading = base_info['runway_heading']
     
-    if curr_xwind > max_xwind:
-        status = 'NO-GO'
-        reasons.append(f"측풍 초과 (현재: {curr_xwind}kt > 제한: {max_xwind}kt)")
+    # 4. 시간대별 데이터 가공
+    time_labels = []
+    crosswind_data = []
+    visibility_data = []
+    ceiling_data = []
+    status_data = []  # GO/NO-GO 판정
     
-    if w_vis < min_vis:
-        status = 'NO-GO'
-        reasons.append(f"시정 미확보 (현재: {w_vis}m < 제한: {min_vis}m)")
+    for row in weather_trend:
+        time_labels.append(row['obs_time'].strftime('%H:%M'))
         
-    if w_ceil < min_ceil:
-        status = 'NO-GO'
-        reasons.append(f"운고 낮음 (현재: {w_ceil}ft < 제한: {min_ceil}ft)")
-
-    if precip_limit and ('RA' in w_desc or 'SN' in w_desc):
-        status = 'NO-GO'
-        reasons.append(f"강수 시 임무 제한 기종 ({w_desc})")
-
-    if status == 'NO-GO':
-        status_color = 'danger'
+        # 측풍 계산
+        wind_dir = row['wind_dir'] or 0
+        wind_spd = row['wind_spd_kts'] or 0
+        crosswind = abs(wind_spd * math.sin(math.radians(wind_dir - runway_heading)))
+        crosswind_data.append(round(crosswind, 1))
+        
+        visibility_data.append(row['visibility_m'] or 0)
+        ceiling_data.append(row['ceiling_ft'] or 0)
+        
+        # 작전 가능 여부 판정
+        is_go = (
+            crosswind <= limits['max_crosswind_kts'] and
+            row['visibility_m'] >= limits['min_visibility_m'] and
+            row['ceiling_ft'] >= limits['min_ceiling_ft']
+        )
+        status_data.append(1 if is_go else 0)
     
-    result = {
-        'base_name': base_name,
-        'obs_time': obs_time.strftime('%H:%M Local'),
-        'weather_desc': w_desc,
-        'wind_info': f"{w_dir}° / {w_spd}kt",
-        'rwy_info': f"{rwy_hdg}°",
-        'crosswind': curr_xwind,
-        'visibility': w_vis,
-        'ceiling': w_ceil,
-        'status': status,
-        'status_color': status_color,
-        'reasons': reasons,
-        'limits': {
-            'xwind': max_xwind,
-            'vis': min_vis,
-            'ceil': min_ceil
+    # 5. 최신 데이터 (현재 상태)
+    if weather_trend:
+        latest = weather_trend[-1]
+        current_crosswind = crosswind_data[-1]
+        current_status = 'GO' if status_data[-1] == 1 else 'NO-GO'
+        
+        reasons = []
+        if current_crosswind > limits['max_crosswind_kts']:
+            reasons.append(f"측풍 초과 ({current_crosswind:.1f} > {limits['max_crosswind_kts']} kt)")
+        if latest['visibility_m'] < limits['min_visibility_m']:
+            reasons.append(f"시정 미달 ({latest['visibility_m']} < {limits['min_visibility_m']} m)")
+        if latest['ceiling_ft'] < limits['min_ceiling_ft']:
+            reasons.append(f"운고 부족 ({latest['ceiling_ft']} < {limits['min_ceiling_ft']} ft)")
+        
+        result = {
+            'status': current_status,
+            'status_color': 'success' if current_status == 'GO' else 'danger',
+            'base_name': base_info['base_name'],
+            'obs_time': latest['obs_time'].strftime('%H:%M'),
+            'weather_desc': latest['weather_desc'],
+            'crosswind': f"{current_crosswind:.1f} kt",
+            'visibility': f"{latest['visibility_m']} m",
+            'ceiling': f"{latest['ceiling_ft']} ft",
+            'wind_info': f"{latest['wind_dir']}° / {latest['wind_spd_kts']} kt",
+            'rwy_info': f"{runway_heading}°",
+            'reasons': reasons,
+            'limits': {
+                'xwind': limits['max_crosswind_kts'],
+                'vis': limits['min_visibility_m'],
+                'ceil': limits['min_ceiling_ft']
+            },
+            # 차트 데이터
+            'chart': {
+                'labels': time_labels,
+                'crosswind': crosswind_data,
+                'visibility': visibility_data,
+                'ceiling': ceiling_data,
+                'status': status_data,
+                'limits': {
+                    'crosswind': limits['max_crosswind_kts'],
+                    'visibility': limits['min_visibility_m'],
+                    'ceiling': limits['min_ceiling_ft']
+                }
+            }
         }
-    }
+    else:
+        result = {'error': '기상 데이터가 없습니다.'}
     
     return jsonify(result)
 

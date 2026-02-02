@@ -531,11 +531,31 @@
                 </div>
             </div>
         </div>
+        
+        <!-- 시간대별 추세 차트 추가 -->
+        <div class="mission-card mt-4">
+            <div class="card-header-custom">
+                <i class="fas fa-chart-line"></i> 24시간 기상 추세 분석
+            </div>
+            <div style="height: 400px; position: relative;">
+                <canvas id="trendChart"></canvas>
+            </div>
+            <div class="alert alert-info mt-3" style="background: rgba(79, 172, 254, 0.1); border: 1px solid rgba(79, 172, 254, 0.3); color: #4facfe;">
+                <i class="fas fa-info-circle"></i> 
+                <strong>차트 해석:</strong> 측풍이 제한선(점선) 아래에 있고 시정/운고가 충분할 때 작전 가능합니다. 
+                범례를 클릭하여 시정/운고 데이터를 표시/숨김 할 수 있습니다.
+            </div>
+        </div>
     </div>
 </div>
 
-<!-- JavaScript -->
+<!-- Chart.js CDN 추가 (</body> 위에) -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<!-- JavaScript 전체 교체 -->
 <script>
+let trendChart = null;
+
 async function analyze() {
     const baseId = document.getElementById('baseSelect').value;
     const aircraftId = document.getElementById('aircraftSelect').value;
@@ -553,9 +573,11 @@ async function analyze() {
         return;
     }
 
+    // 결과 섹션 표시
     document.getElementById('dashboardResult').style.display = 'block';
     document.getElementById('dashboardResult').scrollIntoView({ behavior: 'smooth' });
 
+    // 상태 업데이트
     const statusEl = document.getElementById('statusText');
     statusEl.innerText = data.status;
     statusEl.className = 'status-big text-' + data.status_color;
@@ -571,16 +593,24 @@ async function analyze() {
     document.getElementById('resTime').innerText = data.obs_time;
     document.getElementById('resWeather').innerText = data.weather_desc;
 
-    updateCard('Xwind', data.crosswind, data.limits.xwind, true);
+    // 현재 값 카드 업데이트
+    const crosswindValue = parseFloat(data.crosswind);
+    const visibilityValue = parseInt(data.visibility);
+    const ceilingValue = parseInt(data.ceiling);
+
+    updateCard('Xwind', crosswindValue, data.limits.xwind, true);
     document.getElementById('resWindRaw').innerText = data.wind_info;
     document.getElementById('resRwyRaw').innerText = data.rwy_info;
 
-    updateCard('Vis', data.visibility, data.limits.vis, false);
-    updateCard('Ceil', data.ceiling, data.limits.ceil, false);
+    updateCard('Vis', visibilityValue, data.limits.vis, false);
+    updateCard('Ceil', ceilingValue, data.limits.ceil, false);
+
+    // 차트 생성
+    createTrendChart(data.chart, aircraftId);
 }
 
 function updateCard(id, current, limit, isLowerBetter) {
-    document.getElementById('res' + id).innerText = current;
+    document.getElementById('res' + id).innerText = current + (id === 'Xwind' ? ' kt' : (id === 'Vis' ? ' m' : ' ft'));
     document.getElementById('lim' + id).innerText = limit;
 
     let percent = 0;
@@ -602,6 +632,119 @@ function updateCard(id, current, limit, isLowerBetter) {
     const bar = document.getElementById('bar' + id);
     bar.style.width = percent + '%';
     bar.className = 'progress-bar ' + color;
+}
+
+function createTrendChart(chartData, aircraftId) {
+    const ctx = document.getElementById('trendChart');
+    
+    // 기존 차트 제거
+    if (trendChart) {
+        trendChart.destroy();
+    }
+
+    // GO/NO-GO 배경 영역 생성
+    const backgroundColors = chartData.status.map(s => s === 1 ? 'rgba(67, 233, 123, 0.1)' : 'rgba(245, 87, 108, 0.1)');
+
+    trendChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: chartData.labels,
+            datasets: [
+                {
+                    label: '측풍 (kt)',
+                    data: chartData.crosswind,
+                    borderColor: 'rgb(102, 126, 234)',
+                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                    borderWidth: 3,
+                    tension: 0.4,
+                    yAxisID: 'y1'
+                },
+                {
+                    label: '측풍 제한',
+                    data: Array(chartData.labels.length).fill(chartData.limits.crosswind),
+                    borderColor: 'rgba(245, 87, 108, 0.5)',
+                    borderWidth: 2,
+                    borderDash: [5, 5],
+                    pointRadius: 0,
+                    yAxisID: 'y1'
+                },
+                {
+                    label: '시정 (m)',
+                    data: chartData.visibility,
+                    borderColor: 'rgb(79, 172, 254)',
+                    backgroundColor: 'rgba(79, 172, 254, 0.1)',
+                    borderWidth: 3,
+                    tension: 0.4,
+                    yAxisID: 'y2',
+                    hidden: true
+                },
+                {
+                    label: '운고 (ft)',
+                    data: chartData.ceiling,
+                    borderColor: 'rgb(67, 233, 123)',
+                    backgroundColor: 'rgba(67, 233, 123, 0.1)',
+                    borderWidth: 3,
+                    tension: 0.4,
+                    yAxisID: 'y3',
+                    hidden: true
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            plugins: {
+                title: {
+                    display: true,
+                    text: `${aircraftId} - 24시간 기상 추세 및 작전 가능 시간대`,
+                    color: '#fff',
+                    font: { size: 16, weight: 'bold' }
+                },
+                legend: {
+                    labels: { color: '#e0e0e0' }
+                },
+                tooltip: {
+                    callbacks: {
+                        afterLabel: function(context) {
+                            const idx = context.dataIndex;
+                            return chartData.status[idx] === 1 ? '✅ GO' : '❌ NO-GO';
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    ticks: { color: '#e0e0e0' },
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                },
+                y1: {
+                    type: 'linear',
+                    position: 'left',
+                    title: { display: true, text: '측풍 (kt)', color: '#e0e0e0' },
+                    ticks: { color: '#e0e0e0' },
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                },
+                y2: {
+                    type: 'linear',
+                    position: 'right',
+                    title: { display: true, text: '시정 (m)', color: '#e0e0e0' },
+                    ticks: { color: '#e0e0e0' },
+                    grid: { display: false }
+                },
+                y3: {
+                    type: 'linear',
+                    position: 'right',
+                    title: { display: true, text: '운고 (ft)', color: '#e0e0e0' },
+                    ticks: { color: '#e0e0e0' },
+                    grid: { display: false }
+                }
+            }
+        }
+    });
 }
 </script>
 
