@@ -1,9 +1,3 @@
-제공해주신 HTML 기록(대화 내용)과 프로젝트의 흐름을 바탕으로, **AMWS (Air Mission Weather System)** 프로젝트의 구현 과정을 단계별로 정리해 드립니다.
-
-이 문서는 포트폴리오나 프로젝트 기술서(README) 작성 시 활용하기 좋도록 구성했습니다.
-
----
-
 # 🛫 AMWS (Air Mission Weather System) 프로젝트 구현 보고서
 
 ## 1. 프로젝트 개요
