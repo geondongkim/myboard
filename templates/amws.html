@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AMWS - 공군 작전 기상 지원 시스템</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="<https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css>" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet">
+</head>
+<body>
+
+<nav class="navbar navbar-dark bg-dark border-bottom border-secondary mb-4">
+    <div class="container-fluid">
+        <span class="navbar-brand mb-0 h1">
+            ✈️ AMWS (Air Mission Weather System)
+        </span>
+        <span class="text-secondary small">UNCLASSIFIED</span>
+    </div>
+</nav>
+
+<div class="container">
+    <!-- 1. 컨트롤 패널 -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">Mission Configuration</div>
+                <div class="card-body">
+                    <form id="analysisForm" class="row g-3 align-items-center">
+                        <div class="col-md-4">
+                            <label for="baseSelect" class="form-label text-secondary">Base (비행장)</label>
+                            <select class="form-select bg-dark text-light border-secondary" id="baseSelect">
+                                {% for base in bases %}
+                                <option value="{{ base[0] }}">{{ base[0] }} - {{ base[1] }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="aircraftSelect" class="form-label text-secondary">Asset (항공자산)</label>
+                            <select class="form-select bg-dark text-light border-secondary" id="aircraftSelect">
+                                {% for ac in aircrafts %}
+                                <option value="{{ ac[0] }}">{{ ac[0] }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <label class="form-label d-block">&nbsp;</label>
+                            <button type="button" class="btn btn-primary w-50" onclick="analyze()">Analyze</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. 결과 대시보드 (초기에는 숨김) -->
+    <div id="dashboardResult" style="display: none;">
+        <div class="row">
+            <!-- 좌측: 종합 판정 -->
+            <div class="col-md-4">
+                <div class="status-box">
+                    <div class="data-label mb-2">MISSION STATUS</div>
+                    <div id="statusText" class="status-big">GO</div>
+                    <div id="statusReason" class="mt-3 text-start small text-warning"></div>
+                </div>
+
+                <div class="card mt-3">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <span class="data-label">Base</span>
+                            <span id="resBaseName" class="fw-bold">-</span>
+                        </div>
+                        <div class="d-flex justify-content-between mt-2">
+                            <span class="data-label">Obs Time</span>
+                            <span id="resTime">-</span>
+                        </div>
+                        <div class="d-flex justify-content-between mt-2">
+                            <span class="data-label">Weather</span>
+                            <span id="resWeather" class="badge bg-secondary">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 우측: 상세 요소 분석 -->
+            <div class="col-md-8">
+                <div class="row">
+                    <!-- 측풍 분석 -->
+                    <div class="col-md-4">
+                        <div class="card h-100">
+                            <div class="card-header text-center">Crosswind</div>
+                            <div class="card-body text-center">
+                                <div class="data-value" id="resXwind">0 kt</div>
+                                <div class="small text-secondary mb-2">Limit: <span id="limXwind">30</span> kt</div>
+
+                                <!-- Bar Graph -->
+                                <div class="progress" style="height: 5px; background-color: #333;">
+                                    <div id="barXwind" class="progress-bar bg-success" role="progressbar" style="width: 0%"></div>
+                                </div>
+
+                                <hr class="border-secondary">
+                                <div class="text-start small text-secondary">
+                                    Wind: <span id="resWindRaw" class="text-light"></span><br>
+                                    Rwy Hdg: <span id="resRwyRaw" class="text-light"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 시정 분석 -->
+                    <div class="col-md-4">
+                        <div class="card h-100">
+                            <div class="card-header text-center">Visibility</div>
+                            <div class="card-body text-center">
+                                <div class="data-value" id="resVis">9999 m</div>
+                                <div class="small text-secondary mb-2">Min: <span id="limVis">800</span> m</div>
+
+                                <div class="progress" style="height: 5px; background-color: #333;">
+                                    <div id="barVis" class="progress-bar bg-success" role="progressbar" style="width: 100%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 운고 분석 -->
+                    <div class="col-md-4">
+                        <div class="card h-100">
+                            <div class="card-header text-center">Ceiling</div>
+                            <div class="card-body text-center">
+                                <div class="data-value" id="resCeil">30000 ft</div>
+                                <div class="small text-secondary mb-2">Min: <span id="limCeil">200</span> ft</div>
+
+                                <div class="progress" style="height: 5px; background-color: #333;">
+                                    <div id="barCeil" class="progress-bar bg-success" role="progressbar" style="width: 100%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- JavaScript Logic -->
+<script>
+async function analyze() {
+    const baseId = document.getElementById('baseSelect').value;
+    const aircraftId = document.getElementById('aircraftSelect').value;
+
+    const response = await fetch('/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base_id: baseId, aircraft_id: aircraftId })
+    });
+
+    const data = await response.json();
+
+    if (data.error) {
+        alert(data.error);
+        return;
+    }
+
+    // UI 표시
+    document.getElementById('dashboardResult').style.display = 'block';
+
+    // 1. 종합 판정 업데이트
+    const statusEl = document.getElementById('statusText');
+    statusEl.innerText = data.status;
+    statusEl.className = 'status-big text-' + data.status_color;
+
+    // NO-GO 사유 출력
+    const reasonEl = document.getElementById('statusReason');
+    if (data.reasons.length > 0) {
+        reasonEl.innerHTML = '🚫 ' + data.reasons.join('<br>🚫 ');
+    } else {
+        reasonEl.innerHTML = '✅ All Parameters Normal';
+    }
+
+    // 기본 정보 업데이트
+    document.getElementById('resBaseName').innerText = data.base_name;
+    document.getElementById('resTime').innerText = data.obs_time;
+    document.getElementById('resWeather').innerText = data.weather_desc;
+
+    // 2. 수치 데이터 및 바 그래프 업데이트
+    // (1) Crosswind
+    updateCard('Xwind', data.crosswind, data.limits.xwind, true); // true: 값이 작을수록 좋음 (측풍)
+    document.getElementById('resWindRaw').innerText = data.wind_info;
+    document.getElementById('resRwyRaw').innerText = data.rwy_info;
+
+    // (2) Visibility
+    updateCard('Vis', data.visibility, data.limits.vis, false); // false: 값이 클수록 좋음
+
+    // (3) Ceiling
+    updateCard('Ceil', data.ceiling, data.limits.ceil, false);
+}
+
+function updateCard(id, current, limit, isLowerBetter) {
+    // 텍스트 업데이트
+    document.getElementById('res' + id).innerText = current;
+    document.getElementById('lim' + id).innerText = limit;
+
+    // 바 그래프 퍼센트 계산
+    let percent = 0;
+    let color = 'bg-success';
+
+    if (isLowerBetter) {
+        // 측풍: 제한치보다 낮아야 함
+        percent = (current / limit) * 100;
+        if (current > limit) color = 'bg-danger';
+        else if (current > limit * 0.8) color = 'bg-warning';
+    } else {
+        // 시정/운고: 제한치보다 높아야 함
+        // 시각화를 위해 limit의 2배를 100%로 잡음 (단순화)
+        let maxRef = limit * 3;
+        percent = (current / maxRef) * 100;
+        if (current < limit) color = 'bg-danger';
+        else if (current < limit * 1.5) color = 'bg-warning';
+    }
+
+    if (percent > 100) percent = 100;
+
+    const bar = document.getElementById('bar' + id);
+    bar.style.width = percent + '%';
+    bar.className = 'progress-bar ' + color;
+}
+
+// 페이지 로드 시 자동 분석 (첫 번째 옵션으로)
+window.onload = function() {
+    // analyze();
+};
+</script>
+
+</body>
+</html>
