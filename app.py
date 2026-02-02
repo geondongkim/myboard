@@ -6,6 +6,8 @@ from dotenv import load_dotenv
 from datetime import datetime
 import json
 import math # AMWS 계산용 추가
+import folium
+from folium import IFrame
 
 # 로컬 환경에서는 .env를 읽고, Azure에서는 패스.
 if os.path.exists('.env'):
@@ -499,8 +501,198 @@ def amws_monitor():
 
     return render_template('amws_monitor.html', status_list=status_list)
 
-
-
+@app.route('/amws/map')
+def amws_map():
+    """AMWS 지도 페이지 - Folium 기반 (2단계: 항공자산별 상세 정보)"""
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=DictCursor)
+    
+    # 모든 비행장 목록 조회
+    cur.execute("SELECT base_id, base_name, lat, lon, runway_heading FROM amws.airbases ORDER BY base_id")
+    bases = cur.fetchall()
+    
+    # Folium 지도 생성 (한반도 중심)
+    m = folium.Map(
+        location=[36.5, 127.5],
+        zoom_start=7,
+        tiles='OpenStreetMap'
+    )
+    
+    # 각 비행장별로 항공자산 판정 조회 및 마커 추가
+    for base in bases:
+        base_id = base['base_id']
+        base_name = base['base_name']
+        lat = float(base['lat'])
+        lon = float(base['lon'])
+        
+        # 쿼리 2번 실행: 특정 기지의 모든 항공자산 판정
+        query_detail = """
+            WITH latest_weather AS (
+                SELECT 
+                    base_id,
+                    obs_time,
+                    wind_dir,
+                    wind_spd_kts,
+                    visibility_m,
+                    ceiling_ft,
+                    weather_desc
+                FROM amws.weather_observations
+                WHERE base_id = %s
+                ORDER BY obs_time DESC
+                LIMIT 1
+            )
+            SELECT 
+                b.base_id,
+                b.base_name,
+                a.aircraft_id,
+                w.obs_time,
+                w.wind_dir,
+                w.wind_spd_kts,
+                ROUND(ABS(w.wind_spd_kts * SIN(RADIANS(w.wind_dir - b.runway_heading)))::numeric, 1) as crosswind_kts,
+                a.max_crosswind_kts,
+                w.visibility_m,
+                a.min_visibility_m,
+                w.ceiling_ft,
+                a.min_ceiling_ft,
+                w.weather_desc,
+                CASE 
+                    WHEN w.wind_dir IS NULL OR w.wind_spd_kts IS NULL THEN 'NO DATA'
+                    WHEN ABS(w.wind_spd_kts * SIN(RADIANS(w.wind_dir - b.runway_heading))) > a.max_crosswind_kts THEN 'NO-GO'
+                    WHEN w.visibility_m < a.min_visibility_m THEN 'NO-GO'
+                    WHEN w.ceiling_ft < a.min_ceiling_ft THEN 'NO-GO'
+                    WHEN a.precip_restricted AND (w.weather_desc LIKE '%%RA%%' OR w.weather_desc LIKE '%%SN%%') THEN 'NO-GO'
+                    ELSE 'GO'
+                END as status
+            FROM amws.airbases b
+            CROSS JOIN amws.aircraft_assets a
+            LEFT JOIN latest_weather w ON b.base_id = w.base_id
+            WHERE b.base_id = %s
+            ORDER BY a.aircraft_id
+        """
+        
+        cur.execute(query_detail, (base_id, base_id))
+        assets = cur.fetchall()
+        
+        if not assets or not assets[0]['obs_time']:
+            # 데이터 없음
+            color = 'gray'
+            popup_html = f"""
+            <div style="font-family: Arial; width: 350px;">
+                <h4 style="margin: 0 0 10px 0; color: #333;">{base_id} - {base_name}</h4>
+                <p style="color: #999;">기상 데이터 없음</p>
+            </div>
+            """
+        else:
+            # 기상 데이터 추출
+            obs_time = assets[0]['obs_time'].strftime('%H:%M')
+            wind_dir = assets[0]['wind_dir']
+            wind_spd = assets[0]['wind_spd_kts']
+            weather = assets[0]['weather_desc']
+            
+            # GO/NO-GO 카운트
+            go_count = sum(1 for a in assets if a['status'] == 'GO')
+            total_count = len(assets)
+            
+            # 마커 색상
+            if go_count == total_count:
+                color = 'green'
+            elif go_count > 0:
+                color = 'orange'
+            else:
+                color = 'red'
+            
+            # 항공자산별 상세 테이블 생성
+            asset_rows = ""
+            for asset in assets:
+                status = asset['status']
+                aircraft_id = asset['aircraft_id']
+                crosswind = asset['crosswind_kts'] or 0
+                xwind_limit = asset['max_crosswind_kts']
+                vis = asset['visibility_m'] or 0
+                vis_limit = asset['min_visibility_m']
+                ceil = asset['ceiling_ft'] or 0
+                ceil_limit = asset['min_ceiling_ft']
+                
+                # 상태별 색상
+                if status == 'GO':
+                    status_color = '#28a745'
+                    status_icon = '✅'
+                elif status == 'NO-GO':
+                    status_color = '#dc3545'
+                    status_icon = '❌'
+                else:
+                    status_color = '#6c757d'
+                    status_icon = '⚠️'
+                
+                # 위반 항목 표시
+                violations = []
+                if crosswind > xwind_limit:
+                    violations.append(f"측풍{crosswind}kt")
+                if vis < vis_limit:
+                    violations.append(f"시정{vis}m")
+                if ceil < ceil_limit:
+                    violations.append(f"운고{ceil}ft")
+                
+                violation_text = ", ".join(violations) if violations else "-"
+                
+                asset_rows += f"""
+                <tr style="font-size: 11px;">
+                    <td style="padding: 3px 5px;"><b>{aircraft_id}</b></td>
+                    <td style="padding: 3px 5px; text-align: center; color: {status_color}; font-weight: bold;">{status_icon} {status}</td>
+                    <td style="padding: 3px 5px; font-size: 10px; color: #666;">{violation_text}</td>
+                </tr>
+                """
+            
+            # 팝업 HTML (항공자산별 상세 정보 포함)
+            popup_html = f"""
+            <div style="font-family: Arial; width: 400px; max-height: 500px; overflow-y: auto;">
+                <h4 style="margin: 0 0 10px 0; color: #333; border-bottom: 2px solid #333; padding-bottom: 5px;">
+                    {base_id} - {base_name}
+                </h4>
+                
+                <div style="background-color: #f8f9fa; padding: 8px; margin-bottom: 10px; border-radius: 4px;">
+                    <table style="width: 100%; font-size: 12px;">
+                        <tr><td><b>관측시간:</b></td><td>{obs_time}</td></tr>
+                        <tr><td><b>풍향/풍속:</b></td><td>{wind_dir}° / {wind_spd} kt</td></tr>
+                        <tr><td><b>날씨:</b></td><td>{weather}</td></tr>
+                        <tr style="background-color: #e9ecef;">
+                            <td><b>작전가능:</b></td>
+                            <td><span style="color: {color}; font-weight: bold; font-size: 14px;">{go_count}/{total_count}</span></td>
+                        </tr>
+                    </table>
+                </div>
+                
+                <h5 style="margin: 10px 0 5px 0; color: #555; font-size: 13px;">📋 항공자산별 판정</h5>
+                <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                    <thead>
+                        <tr style="background-color: #343a40; color: white;">
+                            <th style="padding: 5px; text-align: left;">기종</th>
+                            <th style="padding: 5px; text-align: center;">상태</th>
+                            <th style="padding: 5px; text-align: left;">제한사항</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {asset_rows}
+                    </tbody>
+                </table>
+            </div>
+            """
+        
+        # 마커 추가
+        folium.Marker(
+            location=[lat, lon],
+            popup=folium.Popup(popup_html, max_width=450),
+            tooltip=f"{base_id} - {base_name} (클릭하여 상세 정보)",
+            icon=folium.Icon(color=color, icon='plane', prefix='fa')
+        ).add_to(m)
+    
+    cur.close()
+    conn.close()
+    
+    # 지도를 HTML로 변환
+    map_html = m._repr_html_()
+    
+    return render_template('amws_map.html', map_html=map_html)
 
 if __name__ == '__main__':
     app.run(debug=True)
